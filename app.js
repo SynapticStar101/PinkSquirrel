@@ -9,6 +9,7 @@
     // ─── State ───────────────────────────────────────────
     const STATE_KEY = 'notekeeper_tasks';
     const ONBOARDED_KEY = 'notekeeper_onboarded';
+    const API_KEY_KEY = 'notekeeper_api_key';
 
     let tasks = loadTasks();
     let currentFilter = 'all';
@@ -28,6 +29,7 @@
         priorityOverlay: $('#priority-overlay'),
         editOverlay: $('#edit-overlay'),
         helpOverlay: $('#help-overlay'),
+        settingsOverlay: $('#settings-overlay'),
 
         // Processing
         processingTitle: $('#processing-title'),
@@ -47,6 +49,10 @@
         editTaskDate: $('#edit-task-date'),
         editTaskNotes: $('#edit-task-notes'),
         editPriorityButtons: $('#edit-priority-buttons'),
+
+        // Settings
+        settingsApiKey: $('#settings-api-key'),
+        settingsStatus: $('#settings-status'),
 
         // Main
         uploadArea: $('#upload-area'),
@@ -107,6 +113,11 @@
         // Help
         $('#help-btn').addEventListener('click', () => showOverlay(dom.helpOverlay));
         $('#help-close').addEventListener('click', () => hideOverlay(dom.helpOverlay));
+
+        // Settings
+        $('#settings-btn').addEventListener('click', openSettings);
+        $('#settings-save').addEventListener('click', saveSettings);
+        $('#settings-close').addEventListener('click', () => hideOverlay(dom.settingsOverlay));
 
         // File inputs
         dom.cameraInput.addEventListener('change', handleFileSelect);
@@ -190,7 +201,7 @@
         });
 
         // Close overlays on background click
-        [dom.helpOverlay, dom.editOverlay].forEach(overlay => {
+        [dom.helpOverlay, dom.editOverlay, dom.settingsOverlay].forEach(overlay => {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     hideOverlay(overlay);
@@ -210,35 +221,126 @@
         e.target.value = '';
     }
 
+    // ─── Image Preparation ────────────────────────────────
+    function prepareImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const MAX_SIZE = 1600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_SIZE || height > MAX_SIZE) {
+                        const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    const base64 = dataUrl.split(',')[1];
+                    resolve({ base64: base64, mediaType: 'image/jpeg' });
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // ─── AI-Powered Recognition (Claude Vision) ────────
+    async function recognizeWithAI(imageBase64, mediaType, apiKey) {
+        const body = { image: imageBase64, mediaType: mediaType };
+        if (apiKey) {
+            body.apiKey = apiKey;
+        }
+
+        const response = await fetch('/api/recognize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || 'api_error');
+        }
+
+        const result = await response.json();
+        return result.text || '';
+    }
+
+    // ─── Tesseract Fallback ─────────────────────────────
+    async function recognizeWithTesseract(file) {
+        if (typeof Tesseract === 'undefined') {
+            throw new Error('Tesseract not available');
+        }
+
+        updateProgress(10, 'Using basic text reader (for better results, add your API key in Settings)...');
+
+        const worker = await Tesseract.createWorker('eng', 1, {
+            logger: (m) => {
+                if (m.status === 'recognizing text') {
+                    const pct = Math.round(m.progress * 100);
+                    updateProgress(pct, 'Reading your handwriting...');
+                } else if (m.status === 'loading language traineddata') {
+                    updateProgress(10, 'Getting ready to read...');
+                }
+            }
+        });
+
+        const { data: { text } } = await worker.recognize(file);
+        await worker.terminate();
+        return text;
+    }
+
     // ─── OCR Processing ──────────────────────────────────
     async function processImage(file) {
         showOverlay(dom.processingOverlay);
         updateProgress(0, 'Preparing your image...');
 
         try {
-            const worker = await Tesseract.createWorker('eng', 1, {
-                logger: (m) => {
-                    if (m.status === 'recognizing text') {
-                        const pct = Math.round(m.progress * 100);
-                        updateProgress(pct, 'Reading your handwriting...');
-                    } else if (m.status === 'loading language traineddata') {
-                        updateProgress(10, 'Getting ready to read...');
-                    }
+            const apiKey = localStorage.getItem(API_KEY_KEY) || '';
+            let text = '';
+            let usedAI = false;
+
+            // Try AI-powered recognition first
+            try {
+                updateProgress(20, 'Reading your notes with AI...');
+                const prepared = await prepareImage(file);
+                updateProgress(40, 'AI is reading your handwriting...');
+                text = await recognizeWithAI(prepared.base64, prepared.mediaType, apiKey);
+                usedAI = true;
+                updateProgress(90, 'Almost done...');
+            } catch (aiError) {
+                console.log('AI recognition unavailable, falling back to basic OCR:', aiError.message);
+                // Fall back to Tesseract
+                try {
+                    text = await recognizeWithTesseract(file);
+                } catch (tessError) {
+                    console.error('Tesseract also failed:', tessError);
                 }
-            });
-
-            updateProgress(20, 'Analysing your notes...');
-
-            const { data: { text } } = await worker.recognize(file);
-            await worker.terminate();
+            }
 
             updateProgress(100, 'Done!');
+
+            if (!text || text.trim().length === 0) {
+                hideOverlay(dom.processingOverlay);
+                alert("I couldn't read any text from that image. Please try a clearer photo with good lighting.");
+                return;
+            }
 
             // Parse lines into tasks
             const rawLines = text.split('\n')
                 .map(line => line.trim())
-                .filter(line => line.length > 2) // Filter very short junk
-                .filter(line => !/^[\-\.\*\#\=\~]+$/.test(line)); // Filter decorative lines
+                .filter(line => line.length > 2)
+                .filter(line => !/^[\-\.\*\#\=\~]+$/.test(line));
 
             if (rawLines.length === 0) {
                 hideOverlay(dom.processingOverlay);
@@ -249,9 +351,9 @@
             // Clean up lines - remove common list prefixes
             const cleanedLines = rawLines.map(line => {
                 return line
-                    .replace(/^[\d]+[\.\)\-\:]\s*/, '') // "1. ", "1) ", "1- "
-                    .replace(/^[\-\*\•\·\○\●\□\■\☐\☑]\s*/, '') // bullet points
-                    .replace(/^\[[\s\x]?\]\s*/, '') // "[ ] " checkboxes
+                    .replace(/^[\d]+[\.\)\-\:]\s*/, '')
+                    .replace(/^[\-\*\•\·\○\●\□\■\☐\☑]\s*/, '')
+                    .replace(/^\[[\s\x]?\]\s*/, '')
                     .trim();
             }).filter(line => line.length > 1);
 
@@ -729,11 +831,34 @@
         // Only restore scrolling if no other overlays are visible
         const anyVisible = [
             dom.onboardingOverlay, dom.processingOverlay, dom.confirmOverlay,
-            dom.priorityOverlay, dom.editOverlay, dom.helpOverlay
+            dom.priorityOverlay, dom.editOverlay, dom.helpOverlay, dom.settingsOverlay
         ].some(o => !o.classList.contains('hidden'));
         if (!anyVisible) {
             document.body.style.overflow = '';
         }
+    }
+
+    // ─── Settings ──────────────────────────────────────
+    function openSettings() {
+        const savedKey = localStorage.getItem(API_KEY_KEY) || '';
+        dom.settingsApiKey.value = savedKey;
+        dom.settingsStatus.textContent = savedKey ? 'API key is saved.' : 'No API key set. Basic OCR will be used (less accurate for handwriting).';
+        dom.settingsStatus.className = 'settings-status' + (savedKey ? ' status-ok' : ' status-warn');
+        showOverlay(dom.settingsOverlay);
+    }
+
+    function saveSettings() {
+        const key = dom.settingsApiKey.value.trim();
+        if (key) {
+            localStorage.setItem(API_KEY_KEY, key);
+            dom.settingsStatus.textContent = 'API key saved! AI-powered handwriting recognition is now active.';
+            dom.settingsStatus.className = 'settings-status status-ok';
+        } else {
+            localStorage.removeItem(API_KEY_KEY);
+            dom.settingsStatus.textContent = 'API key removed. Basic OCR will be used.';
+            dom.settingsStatus.className = 'settings-status status-warn';
+        }
+        setTimeout(() => hideOverlay(dom.settingsOverlay), 1200);
     }
 
     function showCelebration(emoji) {

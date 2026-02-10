@@ -1098,6 +1098,71 @@ body {
     color: var(--color-text-secondary);
 }
 
+/* --- Settings --- */
+.settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.settings-section {
+    margin-bottom: var(--space-md);
+}
+
+.settings-section h3 {
+    font-size: var(--font-size-xl);
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+.settings-description {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin-bottom: var(--space-lg);
+}
+
+.settings-status {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    margin-top: var(--space-sm);
+}
+
+.settings-status.status-ok {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.settings-status.status-warn {
+    background: var(--color-warning-light);
+    color: #92400E;
+}
+
+.settings-hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-top: var(--space-md);
+    line-height: 1.5;
+}
+
+.settings-hint a {
+    color: var(--color-primary);
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.settings-hint a:hover {
+    color: var(--color-primary-dark);
+}
+
+.header-right {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
 /* --- Task completion celebration --- */
 .celebration {
     position: fixed;
