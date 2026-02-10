@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NoteKeeper - Your Personal Task Helper</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Welcome / Onboarding overlay (first time only) -->
+    <div id="onboarding-overlay" class="overlay hidden">
+        <div class="overlay-content onboarding-card">
+            <div class="onboarding-icon">👋</div>
+            <h1>Welcome to NoteKeeper!</h1>
+            <p class="onboarding-text">
+                I'm here to help you turn your handwritten notes into an organised task list.
+            </p>
+            <div class="onboarding-steps">
+                <div class="onboarding-step">
+                    <span class="step-icon">📸</span>
+                    <span class="step-text">Take a photo of your notes</span>
+                </div>
+                <div class="onboarding-step">
+                    <span class="step-icon">✅</span>
+                    <span class="step-text">I'll read them and make a list</span>
+                </div>
+                <div class="onboarding-step">
+                    <span class="step-icon">📅</span>
+                    <span class="step-text">Set priorities and due dates</span>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-xl" id="onboarding-start">
+                Let's Get Started!
+            </button>
+        </div>
+    </div>
+
+    <!-- Processing overlay -->
+    <div id="processing-overlay" class="overlay hidden">
+        <div class="overlay-content processing-card">
+            <div class="processing-spinner"></div>
+            <h2 id="processing-title">Reading Your Notes...</h2>
+            <p id="processing-message" class="processing-text">This may take a moment. I'm carefully reading your handwriting.</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="processing-progress"></div>
+            </div>
+            <p id="processing-percent" class="processing-percent">0%</p>
+        </div>
+    </div>
+
+    <!-- Confirm Tasks overlay -->
+    <div id="confirm-overlay" class="overlay hidden">
+        <div class="overlay-content confirm-card">
+            <h2>📝 Here's What I Found</h2>
+            <p class="confirm-subtitle">Please check these tasks are correct. You can edit, remove, or add more.</p>
+            <div id="confirm-tasks-list" class="confirm-tasks-list"></div>
+            <div class="confirm-add-row">
+                <input type="text" id="confirm-add-input" class="input-field" placeholder="Add another task...">
+                <button class="btn btn-secondary" id="confirm-add-btn">+ Add</button>
+            </div>
+            <div class="confirm-actions">
+                <button class="btn btn-primary btn-xl" id="confirm-accept">
+                    ✓ These Look Good — Next Step
+                </button>
+                <button class="btn btn-ghost" id="confirm-cancel">Start Over</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Priority Setting overlay -->
+    <div id="priority-overlay" class="overlay hidden">
+        <div class="overlay-content priority-card">
+            <h2>🎯 Set Priorities & Due Dates</h2>
+            <p class="confirm-subtitle">Tap a priority level for each task, and pick when it needs doing.</p>
+            <div id="priority-tasks-list" class="priority-tasks-list"></div>
+            <div class="confirm-actions">
+                <button class="btn btn-primary btn-xl" id="priority-accept">
+                    ✓ All Done — Add to My List!
+                </button>
+                <button class="btn btn-ghost" id="priority-back">← Go Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Task overlay -->
+    <div id="edit-overlay" class="overlay hidden">
+        <div class="overlay-content edit-card">
+            <h2>✏️ Edit Task</h2>
+            <label class="input-label" for="edit-task-text">Task</label>
+            <input type="text" id="edit-task-text" class="input-field input-field-lg">
+            <label class="input-label" for="edit-task-priority">Priority</label>
+            <div class="priority-buttons" id="edit-priority-buttons">
+                <button class="priority-btn priority-high" data-priority="high">🔴 Urgent</button>
+                <button class="priority-btn priority-medium" data-priority="medium">🟡 Soon</button>
+                <button class="priority-btn priority-low" data-priority="low">🟢 When Possible</button>
+            </div>
+            <label class="input-label" for="edit-task-date">Due Date</label>
+            <input type="date" id="edit-task-date" class="input-field input-field-lg">
+            <label class="input-label" for="edit-task-notes">Notes (optional)</label>
+            <textarea id="edit-task-notes" class="input-field input-field-lg" rows="3" placeholder="Any extra details..."></textarea>
+            <div class="confirm-actions">
+                <button class="btn btn-primary btn-xl" id="edit-save">✓ Save Changes</button>
+                <button class="btn btn-ghost" id="edit-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">📋 NoteKeeper</h1>
+                <p class="app-subtitle" id="greeting-text">Good morning!</p>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-icon" id="help-btn" title="Help" aria-label="Help">?</button>
+            </div>
+        </header>
+
+        <!-- Upload Section -->
+        <section class="upload-section" id="upload-section">
+            <div class="upload-area" id="upload-area">
+                <div class="upload-icon">📸</div>
+                <h2 class="upload-title">Snap or Upload Your Notes</h2>
+                <p class="upload-hint">Take a photo or choose a picture of your handwritten notes</p>
+                <div class="upload-buttons">
+                    <label class="btn btn-primary btn-xl upload-btn" for="camera-input">
+                        📷 Take a Photo
+                    </label>
+                    <label class="btn btn-secondary btn-xl upload-btn" for="file-input">
+                        📁 Choose a Picture
+                    </label>
+                </div>
+                <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden-input">
+                <input type="file" id="file-input" accept="image/*" class="hidden-input">
+                <p class="upload-or">— or drag a photo here —</p>
+            </div>
+        </section>
+
+        <!-- Filter Bar -->
+        <section class="filter-bar" id="filter-bar">
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="all">All</button>
+                <button class="filter-tab" data-filter="active">To Do</button>
+                <button class="filter-tab" data-filter="completed">Done</button>
+                <button class="filter-tab" data-filter="overdue">Overdue</button>
+            </div>
+            <div class="sort-control">
+                <label for="sort-select" class="sort-label">Sort by:</label>
+                <select id="sort-select" class="sort-select">
+                    <option value="priority">Priority</option>
+                    <option value="date">Due Date</option>
+                    <option value="created">Newest First</option>
+                    <option value="alpha">A to Z</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- Task List -->
+        <section class="task-list-section" id="task-list-section">
+            <div id="task-list" class="task-list"></div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="empty-state">
+                <div class="empty-icon">📝</div>
+                <h3>No tasks yet!</h3>
+                <p>Upload a photo of your notes to get started, or add a task manually below.</p>
+            </div>
+        </section>
+
+        <!-- Quick Add -->
+        <section class="quick-add-section" id="quick-add-section">
+            <div class="quick-add-bar">
+                <input type="text" id="quick-add-input" class="input-field input-field-lg" placeholder="Type a new task...">
+                <button class="btn btn-primary btn-lg" id="quick-add-btn">+ Add</button>
+            </div>
+        </section>
+
+        <!-- Stats Bar -->
+        <section class="stats-bar" id="stats-bar">
+            <div class="stat">
+                <span class="stat-number" id="stat-total">0</span>
+                <span class="stat-label">Total</span>
+            </div>
+            <div class="stat">
+                <span class="stat-number" id="stat-done">0</span>
+                <span class="stat-label">Done</span>
+            </div>
+            <div class="stat">
+                <span class="stat-number" id="stat-overdue">0</span>
+                <span class="stat-label">Overdue</span>
+            </div>
+        </section>
+
+        <!-- Floating Upload Button -->
+        <button class="fab" id="fab-upload" title="Upload more notes" aria-label="Upload more notes">
+            📸
+        </button>
+    </div>
+
+    <!-- Help overlay -->
+    <div id="help-overlay" class="overlay hidden">
+        <div class="overlay-content help-card">
+            <h2>💡 How to Use NoteKeeper</h2>
+            <div class="help-items">
+                <div class="help-item">
+                    <span class="help-icon">📸</span>
+                    <div>
+                        <strong>Upload Notes</strong>
+                        <p>Take a photo or upload a picture of your handwritten notes. I'll read them and create tasks.</p>
+                    </div>
+                </div>
+                <div class="help-item">
+                    <span class="help-icon">✏️</span>
+                    <div>
+                        <strong>Edit Tasks</strong>
+                        <p>Tap any task to edit its name, priority, due date, or add notes.</p>
+                    </div>
+                </div>
+                <div class="help-item">
+                    <span class="help-icon">✅</span>
+                    <div>
+                        <strong>Complete Tasks</strong>
+                        <p>Tap the circle next to a task to mark it as done. Tap again to undo.</p>
+                    </div>
+                </div>
+                <div class="help-item">
+                    <span class="help-icon">🎯</span>
+                    <div>
+                        <strong>Priorities</strong>
+                        <p>🔴 Urgent = needs doing now &nbsp; 🟡 Soon = this week &nbsp; 🟢 When Possible = no rush</p>
+                    </div>
+                </div>
+                <div class="help-item">
+                    <span class="help-icon">🗑️</span>
+                    <div>
+                        <strong>Delete Tasks</strong>
+                        <p>Swipe left on a task or tap the bin icon to remove it.</p>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-xl" id="help-close">Got It!</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
