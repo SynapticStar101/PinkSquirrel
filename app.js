@@ -223,30 +223,36 @@
 
     // ─── Image Preparation ────────────────────────────────
     function prepareImage(file) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
+            reader.onerror = () => reject(new Error('Failed to read image file'));
             reader.onload = (e) => {
                 const img = new Image();
+                img.onerror = () => reject(new Error('Failed to load image'));
                 img.onload = () => {
-                    const MAX_SIZE = 1024;
-                    let width = img.width;
-                    let height = img.height;
+                    try {
+                        const MAX_SIZE = 1024;
+                        let width = img.width;
+                        let height = img.height;
 
-                    if (width > MAX_SIZE || height > MAX_SIZE) {
-                        const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
-                        width = Math.round(width * ratio);
-                        height = Math.round(height * ratio);
+                        if (width > MAX_SIZE || height > MAX_SIZE) {
+                            const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+                            width = Math.round(width * ratio);
+                            height = Math.round(height * ratio);
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                        const base64 = dataUrl.split(',')[1];
+                        resolve({ base64: base64, mediaType: 'image/jpeg' });
+                    } catch (err) {
+                        reject(new Error('Failed to process image: ' + err.message));
                     }
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                    const base64 = dataUrl.split(',')[1];
-                    resolve({ base64: base64, mediaType: 'image/jpeg' });
                 };
                 img.src = e.target.result;
             };
@@ -269,7 +275,7 @@
 
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            throw new Error(err.error || 'api_error');
+            throw new Error(err.message || err.error || 'API returned status ' + response.status);
         }
 
         const result = await response.json();
@@ -309,29 +315,36 @@
             const apiKey = localStorage.getItem(API_KEY_KEY) || '';
             let text = '';
             let usedAI = false;
+            let aiErrorMsg = '';
 
             // Try AI-powered recognition first
-            try {
-                updateProgress(20, 'Reading your notes with AI...');
-                const prepared = await prepareImage(file);
-                updateProgress(40, 'AI is reading your handwriting...');
-                text = await recognizeWithAI(prepared.base64, prepared.mediaType, apiKey);
-                usedAI = true;
-                updateProgress(90, 'Almost done...');
-            } catch (aiError) {
-                console.error('AI recognition failed:', aiError.message);
-                // Show the actual error so the user knows what went wrong
-                const hasKey = apiKey && apiKey.length > 0;
-                if (!hasKey) {
-                    updateProgress(0, 'No API key set. Go to Settings to add your Anthropic API key.');
-                } else {
-                    updateProgress(0, 'AI error: ' + aiError.message + ' — Falling back to basic OCR...');
+            if (!apiKey) {
+                aiErrorMsg = 'No API key set — using basic OCR. For much better handwriting recognition, tap the gear icon and add your Anthropic API key.';
+                alert(aiErrorMsg);
+            } else {
+                try {
+                    updateProgress(20, 'Reading your notes with AI...');
+                    const prepared = await prepareImage(file);
+                    updateProgress(40, 'AI is reading your handwriting (this may take a few seconds)...');
+                    text = await recognizeWithAI(prepared.base64, prepared.mediaType, apiKey);
+                    usedAI = true;
+                    updateProgress(90, 'Almost done...');
+                } catch (aiError) {
+                    aiErrorMsg = aiError.message || 'Unknown AI error';
+                    console.error('AI recognition failed:', aiErrorMsg);
+                    alert('AI handwriting recognition failed:\n\n' + aiErrorMsg + '\n\nFalling back to basic OCR (results will be poor for handwriting).');
                 }
-                // Fall back to Tesseract
+            }
+
+            // Fall back to Tesseract if AI didn't work
+            if (!usedAI) {
                 try {
                     text = await recognizeWithTesseract(file);
                 } catch (tessError) {
                     console.error('Tesseract also failed:', tessError);
+                    hideOverlay(dom.processingOverlay);
+                    alert('All text recognition methods failed. Please try a different image.');
+                    return;
                 }
             }
 
