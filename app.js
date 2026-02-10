@@ -228,7 +228,7 @@
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    const MAX_SIZE = 1600;
+                    const MAX_SIZE = 1024;
                     let width = img.width;
                     let height = img.height;
 
@@ -319,7 +319,14 @@
                 usedAI = true;
                 updateProgress(90, 'Almost done...');
             } catch (aiError) {
-                console.log('AI recognition unavailable, falling back to basic OCR:', aiError.message);
+                console.error('AI recognition failed:', aiError.message);
+                // Show the actual error so the user knows what went wrong
+                const hasKey = apiKey && apiKey.length > 0;
+                if (!hasKey) {
+                    updateProgress(0, 'No API key set. Go to Settings to add your Anthropic API key.');
+                } else {
+                    updateProgress(0, 'AI error: ' + aiError.message + ' — Falling back to basic OCR...');
+                }
                 // Fall back to Tesseract
                 try {
                     text = await recognizeWithTesseract(file);
