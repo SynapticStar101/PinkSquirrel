@@ -317,21 +317,21 @@
             let usedAI = false;
             let aiErrorMsg = '';
 
-            // Try AI-powered recognition first
-            if (!apiKey) {
-                aiErrorMsg = 'No API key set — using basic OCR. For much better handwriting recognition, tap the gear icon and add your Anthropic API key.';
-                alert(aiErrorMsg);
-            } else {
-                try {
-                    updateProgress(20, 'Reading your notes with AI...');
-                    const prepared = await prepareImage(file);
-                    updateProgress(40, 'AI is reading your handwriting (this may take a few seconds)...');
-                    text = await recognizeWithAI(prepared.base64, prepared.mediaType, apiKey);
-                    usedAI = true;
-                    updateProgress(90, 'Almost done...');
-                } catch (aiError) {
-                    aiErrorMsg = aiError.message || 'Unknown AI error';
-                    console.error('AI recognition failed:', aiErrorMsg);
+            // Always try AI-powered recognition first
+            // The server may have ANTHROPIC_API_KEY set even if no local key exists
+            try {
+                updateProgress(20, 'Reading your notes with AI...');
+                const prepared = await prepareImage(file);
+                updateProgress(40, 'AI is reading your handwriting (this may take a few seconds)...');
+                text = await recognizeWithAI(prepared.base64, prepared.mediaType, apiKey);
+                usedAI = true;
+                updateProgress(90, 'Almost done...');
+            } catch (aiError) {
+                aiErrorMsg = aiError.message || 'Unknown AI error';
+                console.error('AI recognition failed:', aiErrorMsg);
+                if (aiErrorMsg.indexOf('no_api_key') !== -1 || aiErrorMsg.indexOf('No API key') !== -1) {
+                    alert('No API key found.\n\nEither set ANTHROPIC_API_KEY in your Azure app settings, or tap the gear icon to enter your key.\n\nFalling back to basic OCR (results will be poor for handwriting).');
+                } else {
                     alert('AI handwriting recognition failed:\n\n' + aiErrorMsg + '\n\nFalling back to basic OCR (results will be poor for handwriting).');
                 }
             }
