@@ -1,8 +1,7 @@
 const https = require('https');
 
 module.exports = async function (context, req) {
-    // API key: prefer server environment variable, fall back to client-provided key
-    const apiKey = process.env.ANTHROPIC_API_KEY || (req.body && req.body.apiKey);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
         context.res = {
@@ -10,7 +9,7 @@ module.exports = async function (context, req) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 error: 'no_api_key',
-                message: 'No API key configured. Set ANTHROPIC_API_KEY in Azure app settings, or enter your key in the NoteKeeper settings.'
+                message: 'ANTHROPIC_API_KEY is not set. Add it in Azure Portal > Static Web App > Environment variables.'
             })
         };
         return;
