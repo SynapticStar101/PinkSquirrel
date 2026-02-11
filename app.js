@@ -9,7 +9,6 @@
     // ─── State ───────────────────────────────────────────
     const STATE_KEY = 'notekeeper_tasks';
     const ONBOARDED_KEY = 'notekeeper_onboarded';
-    const API_KEY_KEY = 'notekeeper_api_key';
 
     let tasks = loadTasks();
     let currentFilter = 'all';
@@ -29,7 +28,6 @@
         priorityOverlay: $('#priority-overlay'),
         editOverlay: $('#edit-overlay'),
         helpOverlay: $('#help-overlay'),
-        settingsOverlay: $('#settings-overlay'),
 
         // Processing
         processingTitle: $('#processing-title'),
@@ -49,10 +47,6 @@
         editTaskDate: $('#edit-task-date'),
         editTaskNotes: $('#edit-task-notes'),
         editPriorityButtons: $('#edit-priority-buttons'),
-
-        // Settings
-        settingsApiKey: $('#settings-api-key'),
-        settingsStatus: $('#settings-status'),
 
         // Main
         uploadArea: $('#upload-area'),
@@ -113,11 +107,6 @@
         // Help
         $('#help-btn').addEventListener('click', () => showOverlay(dom.helpOverlay));
         $('#help-close').addEventListener('click', () => hideOverlay(dom.helpOverlay));
-
-        // Settings
-        $('#settings-btn').addEventListener('click', openSettings);
-        $('#settings-save').addEventListener('click', saveSettings);
-        $('#settings-close').addEventListener('click', () => hideOverlay(dom.settingsOverlay));
 
         // File inputs
         dom.cameraInput.addEventListener('change', handleFileSelect);
@@ -201,7 +190,7 @@
         });
 
         // Close overlays on background click
-        [dom.helpOverlay, dom.editOverlay, dom.settingsOverlay].forEach(overlay => {
+        [dom.helpOverlay, dom.editOverlay].forEach(overlay => {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     hideOverlay(overlay);
@@ -261,16 +250,11 @@
     }
 
     // ─── AI-Powered Recognition (Claude Vision) ────────
-    async function recognizeWithAI(imageBase64, mediaType, apiKey) {
-        const body = { image: imageBase64, mediaType: mediaType };
-        if (apiKey) {
-            body.apiKey = apiKey;
-        }
-
+    async function recognizeWithAI(imageBase64, mediaType) {
         const response = await fetch('/api/recognize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
+            body: JSON.stringify({ image: imageBase64, mediaType: mediaType })
         });
 
         if (!response.ok) {
@@ -312,28 +296,20 @@
         updateProgress(0, 'Preparing your image...');
 
         try {
-            const apiKey = localStorage.getItem(API_KEY_KEY) || '';
             let text = '';
             let usedAI = false;
-            let aiErrorMsg = '';
 
-            // Try AI-powered recognition first
-            if (!apiKey) {
-                aiErrorMsg = 'No API key set — using basic OCR. For much better handwriting recognition, tap the gear icon and add your Anthropic API key.';
-                alert(aiErrorMsg);
-            } else {
-                try {
-                    updateProgress(20, 'Reading your notes with AI...');
-                    const prepared = await prepareImage(file);
-                    updateProgress(40, 'AI is reading your handwriting (this may take a few seconds)...');
-                    text = await recognizeWithAI(prepared.base64, prepared.mediaType, apiKey);
-                    usedAI = true;
-                    updateProgress(90, 'Almost done...');
-                } catch (aiError) {
-                    aiErrorMsg = aiError.message || 'Unknown AI error';
-                    console.error('AI recognition failed:', aiErrorMsg);
-                    alert('AI handwriting recognition failed:\n\n' + aiErrorMsg + '\n\nFalling back to basic OCR (results will be poor for handwriting).');
-                }
+            // Try AI-powered recognition first (API key is set server-side)
+            try {
+                updateProgress(20, 'Reading your notes with AI...');
+                const prepared = await prepareImage(file);
+                updateProgress(40, 'AI is reading your handwriting (this may take a few seconds)...');
+                text = await recognizeWithAI(prepared.base64, prepared.mediaType);
+                usedAI = true;
+                updateProgress(90, 'Almost done...');
+            } catch (aiError) {
+                console.error('AI recognition failed:', aiError.message);
+                alert('AI handwriting recognition failed:\n\n' + (aiError.message || 'Unknown error') + '\n\nFalling back to basic OCR (results will be poor for handwriting).');
             }
 
             // Fall back to Tesseract if AI didn't work
@@ -851,34 +827,11 @@
         // Only restore scrolling if no other overlays are visible
         const anyVisible = [
             dom.onboardingOverlay, dom.processingOverlay, dom.confirmOverlay,
-            dom.priorityOverlay, dom.editOverlay, dom.helpOverlay, dom.settingsOverlay
+            dom.priorityOverlay, dom.editOverlay, dom.helpOverlay
         ].some(o => !o.classList.contains('hidden'));
         if (!anyVisible) {
             document.body.style.overflow = '';
         }
-    }
-
-    // ─── Settings ──────────────────────────────────────
-    function openSettings() {
-        const savedKey = localStorage.getItem(API_KEY_KEY) || '';
-        dom.settingsApiKey.value = savedKey;
-        dom.settingsStatus.textContent = savedKey ? 'API key is saved.' : 'No API key set. Basic OCR will be used (less accurate for handwriting).';
-        dom.settingsStatus.className = 'settings-status' + (savedKey ? ' status-ok' : ' status-warn');
-        showOverlay(dom.settingsOverlay);
-    }
-
-    function saveSettings() {
-        const key = dom.settingsApiKey.value.trim();
-        if (key) {
-            localStorage.setItem(API_KEY_KEY, key);
-            dom.settingsStatus.textContent = 'API key saved! AI-powered handwriting recognition is now active.';
-            dom.settingsStatus.className = 'settings-status status-ok';
-        } else {
-            localStorage.removeItem(API_KEY_KEY);
-            dom.settingsStatus.textContent = 'API key removed. Basic OCR will be used.';
-            dom.settingsStatus.className = 'settings-status status-warn';
-        }
-        setTimeout(() => hideOverlay(dom.settingsOverlay), 1200);
     }
 
     function showCelebration(emoji) {

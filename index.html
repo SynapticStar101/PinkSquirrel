@@ -119,7 +119,6 @@
                 <p class="app-subtitle" id="greeting-text">Good morning!</p>
             </div>
             <div class="header-right">
-                <button class="btn btn-icon" id="settings-btn" title="Settings" aria-label="Settings">&#9881;</button>
                 <button class="btn btn-icon" id="help-btn" title="Help" aria-label="Help">?</button>
             </div>
         </header>
@@ -247,33 +246,6 @@
                 </div>
             </div>
             <button class="btn btn-primary btn-xl" id="help-close">Got It!</button>
-        </div>
-    </div>
-
-    <!-- Settings overlay -->
-    <div id="settings-overlay" class="overlay hidden">
-        <div class="overlay-content settings-card">
-            <h2>&#9881; Settings</h2>
-            <div class="settings-section">
-                <h3>AI Handwriting Recognition</h3>
-                <p class="settings-description">
-                    For the best handwriting recognition, enter your Anthropic API key below.
-                    This uses Claude's AI vision to read your notes accurately.
-                    Without a key, basic OCR is used which is less accurate for handwriting.
-                </p>
-                <label class="input-label" for="settings-api-key">Anthropic API Key</label>
-                <input type="password" id="settings-api-key" class="input-field input-field-lg" placeholder="sk-ant-...">
-                <p id="settings-status" class="settings-status status-warn">No API key set.</p>
-                <p class="settings-hint">
-                    Get your API key from
-                    <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
-                    Your key is stored only in this browser.
-                </p>
-            </div>
-            <div class="confirm-actions">
-                <button class="btn btn-primary btn-xl" id="settings-save">Save Settings</button>
-                <button class="btn btn-ghost" id="settings-close">Cancel</button>
-            </div>
         </div>
     </div>
 
